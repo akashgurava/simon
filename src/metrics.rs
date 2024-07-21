@@ -120,21 +120,21 @@ impl Metrics {
         let process_cpu_usage = GaugeVec::new(process_cpu_usage_opts, &["name", "pid"])?;
 
         let process_disk_read_total_opts =
-            Opts::new("disk_read_total_bytes", "Disk read per process")
+            Opts::new("disk_read_bytes_total", "Disk read per process")
                 .namespace("simon")
                 .subsystem("process");
         let process_disk_read_total =
             GaugeVec::new(process_disk_read_total_opts, &["name", "pid"])?;
 
         let process_disk_write_total_opts =
-            Opts::new("disk_write_total_bytes", "Disk write per process")
+            Opts::new("disk_write_bytes_total", "Disk write per process")
                 .namespace("simon")
                 .subsystem("process");
         let process_disk_write_total =
             GaugeVec::new(process_disk_write_total_opts, &["name", "pid"])?;
 
         let network_received_total_opts = Opts::new(
-            "received_total_bytes",
+            "received_bytes_total",
             "Total number of bytes received, per network interface",
         )
         .namespace("simon")
@@ -142,7 +142,7 @@ impl Metrics {
         let network_received_total = GaugeVec::new(network_received_total_opts, &["interface"])?;
 
         let network_transmitted_total_opts = Opts::new(
-            "transmitted_total_bytes",
+            "transmitted_bytes_total",
             "Total number of bytes transmitted, per network interface",
         )
         .namespace("simon")
