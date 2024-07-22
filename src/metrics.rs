@@ -1,4 +1,4 @@
-use prometheus::{Gauge, GaugeVec, Opts, Registry};
+use prometheus::{CounterVec, Gauge, GaugeVec, Opts, Registry};
 
 /// Struct containing all the metrics we're tracking
 pub struct Metrics {
@@ -29,21 +29,21 @@ pub struct Metrics {
     /// CPU usage per process
     pub(crate) process_cpu_usage: GaugeVec,
     /// Disk read per process
-    pub(crate) process_disk_read_total: GaugeVec,
+    pub(crate) process_disk_read_total: CounterVec,
     /// Disk write per process
-    pub(crate) process_disk_write_total: GaugeVec,
+    pub(crate) process_disk_write_total: CounterVec,
     /// Total number of bytes received, per network interface
-    pub(crate) network_received_total: GaugeVec,
+    pub(crate) network_received_total: CounterVec,
     /// Total number of bytes transmitted, per network interface
-    pub(crate) network_transmitted_total: GaugeVec,
+    pub(crate) network_transmitted_total: CounterVec,
     /// Total number of packets received, per network interface
-    pub(crate) network_packets_received_total: GaugeVec,
+    pub(crate) network_packets_received_total: CounterVec,
     /// Total number of packets transmitted, per network interface
-    pub(crate) network_packets_transmitted_total: GaugeVec,
+    pub(crate) network_packets_transmitted_total: CounterVec,
     /// Total number of errors on received packets, per network interface
-    pub(crate) network_errors_on_received_total: GaugeVec,
+    pub(crate) network_errors_on_received_total: CounterVec,
     /// Total number of errors on transmitted packets, per network interface
-    pub(crate) network_errors_on_transmitted_total: GaugeVec,
+    pub(crate) network_errors_on_transmitted_total: CounterVec,
 }
 
 impl Metrics {
@@ -124,14 +124,14 @@ impl Metrics {
                 .namespace("simon")
                 .subsystem("process");
         let process_disk_read_total =
-            GaugeVec::new(process_disk_read_total_opts, &["name", "pid"])?;
+            CounterVec::new(process_disk_read_total_opts, &["name", "pid"])?;
 
         let process_disk_write_total_opts =
             Opts::new("disk_write_bytes_total", "Disk write per process")
                 .namespace("simon")
                 .subsystem("process");
         let process_disk_write_total =
-            GaugeVec::new(process_disk_write_total_opts, &["name", "pid"])?;
+            CounterVec::new(process_disk_write_total_opts, &["name", "pid"])?;
 
         let network_received_total_opts = Opts::new(
             "received_bytes_total",
@@ -139,7 +139,7 @@ impl Metrics {
         )
         .namespace("simon")
         .subsystem("network");
-        let network_received_total = GaugeVec::new(network_received_total_opts, &["interface"])?;
+        let network_received_total = CounterVec::new(network_received_total_opts, &["interface"])?;
 
         let network_transmitted_total_opts = Opts::new(
             "transmitted_bytes_total",
@@ -148,7 +148,7 @@ impl Metrics {
         .namespace("simon")
         .subsystem("network");
         let network_transmitted_total =
-            GaugeVec::new(network_transmitted_total_opts, &["interface"])?;
+            CounterVec::new(network_transmitted_total_opts, &["interface"])?;
 
         let network_packets_received_total_opts = Opts::new(
             "packets_received_total",
@@ -157,7 +157,7 @@ impl Metrics {
         .namespace("simon")
         .subsystem("network");
         let network_packets_received_total =
-            GaugeVec::new(network_packets_received_total_opts, &["interface"])?;
+            CounterVec::new(network_packets_received_total_opts, &["interface"])?;
 
         let network_packets_transmitted_total_opts = Opts::new(
             "packets_transmitted_total",
@@ -166,7 +166,7 @@ impl Metrics {
         .namespace("simon")
         .subsystem("network");
         let network_packets_transmitted_total =
-            GaugeVec::new(network_packets_transmitted_total_opts, &["interface"])?;
+            CounterVec::new(network_packets_transmitted_total_opts, &["interface"])?;
 
         let network_errors_on_received_total_opts = Opts::new(
             "errors_on_received_total",
@@ -175,7 +175,7 @@ impl Metrics {
         .namespace("simon")
         .subsystem("network");
         let network_errors_on_received_total =
-            GaugeVec::new(network_errors_on_received_total_opts, &["interface"])?;
+            CounterVec::new(network_errors_on_received_total_opts, &["interface"])?;
 
         let network_errors_on_transmitted_total_opts = Opts::new(
             "errors_on_transmitted_total",
@@ -184,7 +184,7 @@ impl Metrics {
         .namespace("simon")
         .subsystem("network");
         let network_errors_on_transmitted_total =
-            GaugeVec::new(network_errors_on_transmitted_total_opts, &["interface"])?;
+            CounterVec::new(network_errors_on_transmitted_total_opts, &["interface"])?;
 
         // Register all metrics with the provided registry
         registry.register(Box::new(cpu_usage.clone()))?;

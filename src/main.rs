@@ -132,12 +132,12 @@ fn try_get_metrics(state: Arc<AppState>) -> Result<Response, Box<dyn std::error:
             .metrics
             .process_disk_read_total
             .with_label_values(&[name, &pid_str])
-            .set(process.disk_usage().total_read_bytes as f64);
+            .inc_by(process.disk_usage().read_bytes as f64);
         state
             .metrics
             .process_disk_write_total
             .with_label_values(&[name, &pid_str])
-            .set(process.disk_usage().total_written_bytes as f64);
+            .inc_by(process.disk_usage().written_bytes as f64);
     }
 
     // Update network metrics
@@ -146,37 +146,37 @@ fn try_get_metrics(state: Arc<AppState>) -> Result<Response, Box<dyn std::error:
             .metrics
             .network_received_total
             .with_label_values(&[name])
-            .set(network.received() as f64);
+            .inc_by(network.received() as f64);
 
         state
             .metrics
             .network_transmitted_total
             .with_label_values(&[name])
-            .set(network.transmitted() as f64);
+            .inc_by(network.transmitted() as f64);
 
         state
             .metrics
             .network_packets_received_total
             .with_label_values(&[name])
-            .set(network.packets_received() as f64);
+            .inc_by(network.packets_received() as f64);
 
         state
             .metrics
             .network_packets_transmitted_total
             .with_label_values(&[name])
-            .set(network.packets_transmitted() as f64);
+            .inc_by(network.packets_transmitted() as f64);
 
         state
             .metrics
             .network_errors_on_received_total
             .with_label_values(&[name])
-            .set(network.errors_on_received() as f64);
+            .inc_by(network.errors_on_received() as f64);
 
         state
             .metrics
             .network_errors_on_transmitted_total
             .with_label_values(&[name])
-            .set(network.errors_on_transmitted() as f64);
+            .inc_by(network.errors_on_transmitted() as f64);
     }
 
     // Encode the metrics as a string
