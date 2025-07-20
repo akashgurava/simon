@@ -12,7 +12,7 @@ use axum::{
     Router,
 };
 use prometheus::{Encoder, TextEncoder};
-use tracing::{error, info};
+use tracing::{debug, error, info};
 
 use state::AppState;
 
@@ -50,7 +50,7 @@ async fn home() -> Html<String> {
 }
 
 async fn metrics(State(state): State<Arc<AppState>>) -> impl IntoResponse {
-    info!("Metrics endpoint called");
+    debug!("Metrics endpoint called");
 
     let start_time = Instant::now();
     let result = try_get_metrics(state);
@@ -71,112 +71,19 @@ async fn metrics(State(state): State<Arc<AppState>>) -> impl IntoResponse {
 }
 
 fn try_get_metrics(state: Arc<AppState>) -> Result<Response, Box<dyn std::error::Error>> {
-    let mut system = state.system.lock().unwrap();
-    let mut networks = state.networks.lock().unwrap();
-    system.refresh_all();
-    networks.refresh();
-
-    // Update CPU usage per core
-    for (i, cpu) in system.cpus().iter().enumerate() {
-        state
-            .metrics
-            .cpu_usage
-            .with_label_values(&[&i.to_string()])
-            .set(cpu.cpu_usage() as f64);
-    }
-
-    // Update memory metrics
-    state.metrics.memory_total.set(system.total_memory() as f64);
-    state.metrics.memory_free.set(system.free_memory() as f64);
-    state
-        .metrics
-        .memory_available
-        .set(system.available_memory() as f64);
-    state.metrics.memory_used.set(system.used_memory() as f64);
-
-    // Update swap metrics
-    state.metrics.swap_total.set(system.total_swap() as f64);
-    state.metrics.swap_free.set(system.free_swap() as f64);
-    state.metrics.swap_used.set(system.used_swap() as f64);
-
-    for (pid, process) in system.processes() {
-        let name = process.name();
-        let pid_str = pid.to_string();
-
-        state
-            .metrics
-            .process_memory
-            .with_label_values(&[name, &pid_str])
-            .set(process.memory() as f64);
-        state
-            .metrics
-            .process_virtual_memory
-            .with_label_values(&[name, &pid_str])
-            .set(process.virtual_memory() as f64);
-        state
-            .metrics
-            .process_start_time
-            .with_label_values(&[name, &pid_str])
-            .set(process.start_time() as f64);
-        state
-            .metrics
-            .process_runtime
-            .with_label_values(&[name, &pid_str])
-            .set(process.run_time() as f64);
-        state
-            .metrics
-            .process_cpu_usage
-            .with_label_values(&[name, &pid_str])
-            .set(process.cpu_usage() as f64);
-        state
-            .metrics
-            .process_disk_read_total
-            .with_label_values(&[name, &pid_str])
-            .inc_by(process.disk_usage().read_bytes as f64);
-        state
-            .metrics
-            .process_disk_write_total
-            .with_label_values(&[name, &pid_str])
-            .inc_by(process.disk_usage().written_bytes as f64);
+    // Update system metrics
+    {
+        let mut system = state.system.lock().unwrap();
+        state.metrics.update_system_metrics(&mut *system)?;
     }
 
     // Update network metrics
-    for (name, network) in networks.iter() {
-        state
-            .metrics
-            .network_received_total
-            .with_label_values(&[name])
-            .inc_by(network.received() as f64);
-
-        state
-            .metrics
-            .network_transmitted_total
-            .with_label_values(&[name])
-            .inc_by(network.transmitted() as f64);
-
-        state
-            .metrics
-            .network_packets_received_total
-            .with_label_values(&[name])
-            .inc_by(network.packets_received() as f64);
-
-        state
-            .metrics
-            .network_packets_transmitted_total
-            .with_label_values(&[name])
-            .inc_by(network.packets_transmitted() as f64);
-
-        state
-            .metrics
-            .network_errors_on_received_total
-            .with_label_values(&[name])
-            .inc_by(network.errors_on_received() as f64);
-
-        state
-            .metrics
-            .network_errors_on_transmitted_total
-            .with_label_values(&[name])
-            .inc_by(network.errors_on_transmitted() as f64);
+    {
+        let mut networks = state.networks.lock().unwrap();
+        networks.refresh(false);
+        for (name, network) in networks.iter() {
+            state.metrics.update_network_metrics(name, network)?;
+        }
     }
 
     // Encode the metrics as a string

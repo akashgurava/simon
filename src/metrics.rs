@@ -3,47 +3,54 @@ use prometheus::{CounterVec, Gauge, GaugeVec, Opts, Registry};
 /// Struct containing all the metrics we're tracking
 pub struct Metrics {
     /// CPU Usage percentage per core
-    pub(crate) cpu_usage: GaugeVec,
+    cpu_usage: GaugeVec,
+
     /// Total physical memory in bytes
-    pub(crate) memory_total: Gauge,
+    memory_total: Gauge,
     /// Free physical memory in bytes
-    pub(crate) memory_free: Gauge,
+    memory_free: Gauge,
     /// Available physical memory in bytes
-    pub(crate) memory_available: Gauge,
+    memory_available: Gauge,
     /// Used physical memory in bytes
-    pub(crate) memory_used: Gauge,
+    memory_used: Gauge,
+
     /// Total swap memory in bytes
-    pub(crate) swap_total: Gauge,
+    swap_total: Gauge,
     /// Free swap memory in bytes
-    pub(crate) swap_free: Gauge,
+    swap_free: Gauge,
     /// Used swap memory in bytes
-    pub(crate) swap_used: Gauge,
-    /// Memory usage per process
-    pub(crate) process_memory: GaugeVec,
-    /// Virtual memory usage per process
-    pub(crate) process_virtual_memory: GaugeVec,
-    /// Start time per process (seconds since epoch)
-    pub(crate) process_start_time: GaugeVec,
-    /// Runtime per process in seconds
-    pub(crate) process_runtime: GaugeVec,
-    /// CPU usage per process
-    pub(crate) process_cpu_usage: GaugeVec,
-    /// Disk read per process
-    pub(crate) process_disk_read_total: CounterVec,
-    /// Disk write per process
-    pub(crate) process_disk_write_total: CounterVec,
+    swap_used: Gauge,
+
+    /// CPU usage per process (aggregated by name)
+    process_cpu_usage: GaugeVec,
+
+    /// Start time per process (earliest start time by name)
+    process_start_time: GaugeVec,
+    /// Runtime per process (max runtime by name)
+    process_runtime: GaugeVec,
+
+    /// Memory usage per process (aggregated by name)
+    process_memory: GaugeVec,
+    /// Virtual memory usage per process (aggregated by name)
+    process_virtual_memory: GaugeVec,
+
+    /// Disk read per process (aggregated by name)
+    process_disk_read_total: GaugeVec,
+    /// Disk write per process (aggregated by name)
+    process_disk_write_total: GaugeVec,
+
     /// Total number of bytes received, per network interface
-    pub(crate) network_received_total: CounterVec,
+    network_received_total: CounterVec,
     /// Total number of bytes transmitted, per network interface
-    pub(crate) network_transmitted_total: CounterVec,
+    network_transmitted_total: CounterVec,
     /// Total number of packets received, per network interface
-    pub(crate) network_packets_received_total: CounterVec,
+    network_packets_received_total: CounterVec,
     /// Total number of packets transmitted, per network interface
-    pub(crate) network_packets_transmitted_total: CounterVec,
+    network_packets_transmitted_total: CounterVec,
     /// Total number of errors on received packets, per network interface
-    pub(crate) network_errors_on_received_total: CounterVec,
+    network_errors_on_received_total: CounterVec,
     /// Total number of errors on transmitted packets, per network interface
-    pub(crate) network_errors_on_transmitted_total: CounterVec,
+    network_errors_on_transmitted_total: CounterVec,
 }
 
 impl Metrics {
@@ -90,48 +97,61 @@ impl Metrics {
             .subsystem("swap");
         let swap_used = Gauge::with_opts(swap_used_opts)?;
 
-        let process_memory_opts = Opts::new("memory_bytes", "Memory usage per process")
-            .namespace("simon")
-            .subsystem("process");
-        let process_memory = GaugeVec::new(process_memory_opts, &["name", "pid"])?;
-
-        let process_virtual_memory_opts =
-            Opts::new("virtual_memory_bytes", "Virtual memory usage per process")
-                .namespace("simon")
-                .subsystem("process");
-        let process_virtual_memory = GaugeVec::new(process_virtual_memory_opts, &["name", "pid"])?;
-
-        let process_start_time_opts = Opts::new(
-            "start_time_seconds",
-            "Start time per process (seconds since epoch)",
+        let process_memory_opts = Opts::new(
+            "memory_bytes",
+            "Memory usage per process (aggregated by name)",
         )
         .namespace("simon")
         .subsystem("process");
-        let process_start_time = GaugeVec::new(process_start_time_opts, &["name", "pid"])?;
+        let process_memory = GaugeVec::new(process_memory_opts, &["name"])?;
 
-        let process_runtime_opts = Opts::new("runtime_seconds", "Runtime per process in seconds")
-            .namespace("simon")
-            .subsystem("process");
-        let process_runtime = GaugeVec::new(process_runtime_opts, &["name", "pid"])?;
+        let process_virtual_memory_opts = Opts::new(
+            "virtual_memory_bytes",
+            "Virtual memory usage per process (aggregated by name)",
+        )
+        .namespace("simon")
+        .subsystem("process");
+        let process_virtual_memory = GaugeVec::new(process_virtual_memory_opts, &["name"])?;
 
-        let process_cpu_usage_opts = Opts::new("cpu_usage_percentage", "CPU usage per process")
-            .namespace("simon")
-            .subsystem("process");
-        let process_cpu_usage = GaugeVec::new(process_cpu_usage_opts, &["name", "pid"])?;
+        let process_start_time_opts = Opts::new(
+            "start_time_seconds",
+            "Start time per process (earliest start time by name)",
+        )
+        .namespace("simon")
+        .subsystem("process");
+        let process_start_time = GaugeVec::new(process_start_time_opts, &["name"])?;
 
-        let process_disk_read_total_opts =
-            Opts::new("disk_read_bytes_total", "Disk read per process")
-                .namespace("simon")
-                .subsystem("process");
-        let process_disk_read_total =
-            CounterVec::new(process_disk_read_total_opts, &["name", "pid"])?;
+        let process_runtime_opts = Opts::new(
+            "runtime_seconds",
+            "Runtime per process (max runtime by name)",
+        )
+        .namespace("simon")
+        .subsystem("process");
+        let process_runtime = GaugeVec::new(process_runtime_opts, &["name"])?;
 
-        let process_disk_write_total_opts =
-            Opts::new("disk_write_bytes_total", "Disk write per process")
-                .namespace("simon")
-                .subsystem("process");
-        let process_disk_write_total =
-            CounterVec::new(process_disk_write_total_opts, &["name", "pid"])?;
+        let process_cpu_usage_opts = Opts::new(
+            "cpu_usage_percentage",
+            "CPU usage per process (aggregated by name)",
+        )
+        .namespace("simon")
+        .subsystem("process");
+        let process_cpu_usage = GaugeVec::new(process_cpu_usage_opts, &["name"])?;
+
+        let process_disk_read_total_opts = Opts::new(
+            "disk_read_bytes_total",
+            "Disk read per process (aggregated by name)",
+        )
+        .namespace("simon")
+        .subsystem("process");
+        let process_disk_read_total = GaugeVec::new(process_disk_read_total_opts, &["name"])?;
+
+        let process_disk_write_total_opts = Opts::new(
+            "disk_write_bytes_total",
+            "Disk write per process (aggregated by name)",
+        )
+        .namespace("simon")
+        .subsystem("process");
+        let process_disk_write_total = GaugeVec::new(process_disk_write_total_opts, &["name"])?;
 
         let network_received_total_opts = Opts::new(
             "received_bytes_total",
@@ -232,5 +252,168 @@ impl Metrics {
             network_errors_on_received_total,
             network_errors_on_transmitted_total,
         })
+    }
+}
+
+/// Implementation for System Metrics
+impl Metrics {
+    fn update_cpu_usage(&self, label: &str, value: f32) -> Result<(), Box<dyn std::error::Error>> {
+        self.cpu_usage.with_label_values(&[label]).set(value.into());
+
+        Ok(())
+    }
+
+    fn update_memory_metrics(
+        &self,
+        total: u64,
+        free: u64,
+        available: u64,
+        used: u64,
+    ) -> Result<(), Box<dyn std::error::Error>> {
+        self.memory_total.set(total as f64);
+        self.memory_free.set(free as f64);
+        self.memory_available.set(available as f64);
+        self.memory_used.set(used as f64);
+
+        Ok(())
+    }
+
+    fn update_swap_metrics(
+        &self,
+        total: u64,
+        free: u64,
+        used: u64,
+    ) -> Result<(), Box<dyn std::error::Error>> {
+        self.swap_total.set(total as f64);
+        self.swap_free.set(free as f64);
+        self.swap_used.set(used as f64);
+
+        Ok(())
+    }
+
+    pub fn update_system_metrics(
+        &self,
+        system: &mut sysinfo::System,
+    ) -> Result<(), Box<dyn std::error::Error>> {
+        system.refresh_all();
+
+        // Update CPU usage per core
+        for (i, cpu) in system.cpus().iter().enumerate() {
+            self.update_cpu_usage(&i.to_string(), cpu.cpu_usage())?;
+        }
+
+        // Update memory metrics
+        self.update_memory_metrics(
+            system.total_memory(),
+            system.free_memory(),
+            system.available_memory(),
+            system.used_memory(),
+        )?;
+
+        // Update swap metrics
+        self.update_swap_metrics(system.total_swap(), system.free_swap(), system.used_swap())?;
+
+        // Update process metrics (aggregated by name)
+        for (_pid, process) in system.processes() {
+            let name = process.name().to_str().unwrap();
+            self.update_process_metrics(name, process)?;
+        }
+
+        Ok(())
+    }
+
+    fn update_process_metrics(
+        &self,
+        name: &str,
+        process: &sysinfo::Process,
+    ) -> Result<(), Box<dyn std::error::Error>> {
+        // Get current values for aggregation
+        let current_cpu = self.process_cpu_usage.with_label_values(&[name]).get();
+        let current_memory = self.process_memory.with_label_values(&[name]).get();
+        let current_virtual_memory = self.process_virtual_memory.with_label_values(&[name]).get();
+        let current_disk_read = self
+            .process_disk_read_total
+            .with_label_values(&[name])
+            .get();
+        let current_disk_write = self
+            .process_disk_write_total
+            .with_label_values(&[name])
+            .get();
+        let current_start_time = self.process_start_time.with_label_values(&[name]).get();
+        let current_run_time = self.process_runtime.with_label_values(&[name]).get();
+
+        // Sum CPU usage, memory, virtual memory, and disk I/O
+        self.process_cpu_usage
+            .with_label_values(&[name])
+            .set(current_cpu + process.cpu_usage() as f64);
+
+        self.process_memory
+            .with_label_values(&[name])
+            .set(current_memory + process.memory() as f64);
+
+        self.process_virtual_memory
+            .with_label_values(&[name])
+            .set(current_virtual_memory + process.virtual_memory() as f64);
+
+        self.process_disk_read_total
+            .with_label_values(&[name])
+            .set(current_disk_read + process.disk_usage().read_bytes as f64);
+
+        self.process_disk_write_total
+            .with_label_values(&[name])
+            .set(current_disk_write + process.disk_usage().written_bytes as f64);
+
+        // Use min for start_time (earliest start time)
+        let new_start_time = if current_start_time == 0.0 {
+            process.start_time() as f64
+        } else {
+            current_start_time.min(process.start_time() as f64)
+        };
+        self.process_start_time
+            .with_label_values(&[name])
+            .set(new_start_time);
+
+        // Use max for run_time (longest running time)
+        let new_run_time = current_run_time.max(process.run_time() as f64);
+        self.process_runtime
+            .with_label_values(&[name])
+            .set(new_run_time);
+
+        Ok(())
+    }
+}
+
+/// Implementation for Network Metrics
+impl Metrics {
+    pub fn update_network_metrics(
+        &self,
+        interface_name: &str,
+        network: &sysinfo::NetworkData,
+    ) -> Result<(), Box<dyn std::error::Error>> {
+        self.network_received_total
+            .with_label_values(&[interface_name])
+            .inc_by(network.received() as f64);
+
+        self.network_transmitted_total
+            .with_label_values(&[interface_name])
+            .inc_by(network.transmitted() as f64);
+
+        self.network_packets_received_total
+            .with_label_values(&[interface_name])
+            .inc_by(network.packets_received() as f64);
+
+        self.network_packets_transmitted_total
+            .with_label_values(&[interface_name])
+            .inc_by(network.packets_transmitted() as f64);
+
+        self.network_errors_on_received_total
+            .with_label_values(&[interface_name])
+            .inc_by(network.errors_on_received() as f64);
+
+        self.network_errors_on_transmitted_total
+            .with_label_values(&[interface_name])
+            .inc_by(network.errors_on_transmitted() as f64);
+
+        Ok(())
     }
 }
