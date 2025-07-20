@@ -35,9 +35,9 @@ pub struct Metrics {
     process_virtual_memory: GaugeVec,
 
     /// Disk read per process (aggregated by name)
-    process_disk_read_total: GaugeVec,
+    process_disk_read_total: CounterVec,
     /// Disk write per process (aggregated by name)
-    process_disk_write_total: GaugeVec,
+    process_disk_write_total: CounterVec,
 
     /// Total number of bytes received, per network interface
     network_received_total: CounterVec,
@@ -143,7 +143,7 @@ impl Metrics {
         )
         .namespace("simon")
         .subsystem("process");
-        let process_disk_read_total = GaugeVec::new(process_disk_read_total_opts, &["name"])?;
+        let process_disk_read_total = CounterVec::new(process_disk_read_total_opts, &["name"])?;
 
         let process_disk_write_total_opts = Opts::new(
             "disk_write_bytes_total",
@@ -151,7 +151,7 @@ impl Metrics {
         )
         .namespace("simon")
         .subsystem("process");
-        let process_disk_write_total = GaugeVec::new(process_disk_write_total_opts, &["name"])?;
+        let process_disk_write_total = CounterVec::new(process_disk_write_total_opts, &["name"])?;
 
         let network_received_total_opts = Opts::new(
             "received_bytes_total",
@@ -327,22 +327,14 @@ impl Metrics {
         name: &str,
         process: &sysinfo::Process,
     ) -> Result<(), Box<dyn std::error::Error>> {
-        // Get current values for aggregation
+        // Get current values for aggregation (since we reset at start of cycle)
         let current_cpu = self.process_cpu_usage.with_label_values(&[name]).get();
         let current_memory = self.process_memory.with_label_values(&[name]).get();
         let current_virtual_memory = self.process_virtual_memory.with_label_values(&[name]).get();
-        let current_disk_read = self
-            .process_disk_read_total
-            .with_label_values(&[name])
-            .get();
-        let current_disk_write = self
-            .process_disk_write_total
-            .with_label_values(&[name])
-            .get();
         let current_start_time = self.process_start_time.with_label_values(&[name]).get();
         let current_run_time = self.process_runtime.with_label_values(&[name]).get();
 
-        // Sum CPU usage, memory, virtual memory, and disk I/O
+        // Sum CPU usage, memory, virtual memory
         self.process_cpu_usage
             .with_label_values(&[name])
             .set(current_cpu + process.cpu_usage() as f64);
@@ -355,13 +347,16 @@ impl Metrics {
             .with_label_values(&[name])
             .set(current_virtual_memory + process.virtual_memory() as f64);
 
+        // Add total disk bytes for this process to the aggregated counter
+        // Use read_bytes and written_bytes for proper counter semantics
+        let disk_usage = process.disk_usage();
         self.process_disk_read_total
             .with_label_values(&[name])
-            .set(current_disk_read + process.disk_usage().read_bytes as f64);
+            .inc_by(disk_usage.read_bytes as f64);
 
         self.process_disk_write_total
             .with_label_values(&[name])
-            .set(current_disk_write + process.disk_usage().written_bytes as f64);
+            .inc_by(disk_usage.written_bytes as f64);
 
         // Use min for start_time (earliest start time)
         let new_start_time = if current_start_time == 0.0 {
