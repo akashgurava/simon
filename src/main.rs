@@ -74,7 +74,8 @@ fn try_get_metrics(state: Arc<AppState>) -> Result<Response, Box<dyn std::error:
     // Update system metrics
     {
         let mut system = state.system.lock().unwrap();
-        state.metrics.update_system_metrics(&mut *system)?;
+        system.refresh_all();
+        state.metrics.update_system_metrics(system);
     }
 
     // Update network metrics
@@ -82,7 +83,7 @@ fn try_get_metrics(state: Arc<AppState>) -> Result<Response, Box<dyn std::error:
         let mut networks = state.networks.lock().unwrap();
         networks.refresh(false);
         for (name, network) in networks.iter() {
-            state.metrics.update_network_metrics(name, network)?;
+            state.metrics.update_network_metrics(name, network);
         }
     }
 

@@ -1,4 +1,7 @@
+use std::sync::MutexGuard;
+
 use prometheus::{CounterVec, Gauge, GaugeVec, Opts, Registry};
+use sysinfo::System;
 
 /// Struct containing all the metrics we're tracking
 pub struct Metrics {
@@ -257,76 +260,34 @@ impl Metrics {
 
 /// Implementation for System Metrics
 impl Metrics {
-    fn update_cpu_usage(&self, label: &str, value: f32) -> Result<(), Box<dyn std::error::Error>> {
+    fn update_cpu_usage(&self, label: &str, value: f32) {
         self.cpu_usage.with_label_values(&[label]).set(value.into());
-
-        Ok(())
     }
 
-    fn update_memory_metrics(
-        &self,
-        total: u64,
-        free: u64,
-        available: u64,
-        used: u64,
-    ) -> Result<(), Box<dyn std::error::Error>> {
+    fn update_memory_metrics(&self, total: u64, free: u64, available: u64, used: u64) {
         self.memory_total.set(total as f64);
         self.memory_free.set(free as f64);
         self.memory_available.set(available as f64);
         self.memory_used.set(used as f64);
-
-        Ok(())
     }
 
-    fn update_swap_metrics(
-        &self,
-        total: u64,
-        free: u64,
-        used: u64,
-    ) -> Result<(), Box<dyn std::error::Error>> {
+    fn update_swap_metrics(&self, total: u64, free: u64, used: u64) {
         self.swap_total.set(total as f64);
         self.swap_free.set(free as f64);
         self.swap_used.set(used as f64);
-
-        Ok(())
     }
 
-    pub fn update_system_metrics(
-        &self,
-        system: &mut sysinfo::System,
-    ) -> Result<(), Box<dyn std::error::Error>> {
-        system.refresh_all();
-
-        // Update CPU usage per core
-        for (i, cpu) in system.cpus().iter().enumerate() {
-            self.update_cpu_usage(&i.to_string(), cpu.cpu_usage())?;
-        }
-
-        // Update memory metrics
-        self.update_memory_metrics(
-            system.total_memory(),
-            system.free_memory(),
-            system.available_memory(),
-            system.used_memory(),
-        )?;
-
-        // Update swap metrics
-        self.update_swap_metrics(system.total_swap(), system.free_swap(), system.used_swap())?;
-
-        // Update process metrics (aggregated by name)
-        for (_pid, process) in system.processes() {
-            let name = process.name().to_str().unwrap();
-            self.update_process_metrics(name, process)?;
-        }
-
-        Ok(())
+    fn reset_process_metrics(&self) {
+        // Reset all process gauge metrics to 0
+        // Note: We don't reset counters (disk I/O) as they should accumulate
+        self.process_cpu_usage.reset();
+        self.process_memory.reset();
+        self.process_virtual_memory.reset();
+        self.process_start_time.reset();
+        self.process_runtime.reset();
     }
 
-    fn update_process_metrics(
-        &self,
-        name: &str,
-        process: &sysinfo::Process,
-    ) -> Result<(), Box<dyn std::error::Error>> {
+    fn update_process_metrics(&self, name: &str, process: &sysinfo::Process) {
         // Get current values for aggregation (since we reset at start of cycle)
         let current_cpu = self.process_cpu_usage.with_label_values(&[name]).get();
         let current_memory = self.process_memory.with_label_values(&[name]).get();
@@ -334,7 +295,7 @@ impl Metrics {
         let current_start_time = self.process_start_time.with_label_values(&[name]).get();
         let current_run_time = self.process_runtime.with_label_values(&[name]).get();
 
-        // Sum CPU usage, memory, virtual memory
+        // Sum CPU usage, memory, virtual memory (aggregating across processes with same name)
         self.process_cpu_usage
             .with_label_values(&[name])
             .set(current_cpu + process.cpu_usage() as f64);
@@ -347,8 +308,7 @@ impl Metrics {
             .with_label_values(&[name])
             .set(current_virtual_memory + process.virtual_memory() as f64);
 
-        // Add total disk bytes for this process to the aggregated counter
-        // Use read_bytes and written_bytes for proper counter semantics
+        // Add disk I/O bytes for this process (delta values)
         let disk_usage = process.disk_usage();
         self.process_disk_read_total
             .with_label_values(&[name])
@@ -358,7 +318,7 @@ impl Metrics {
             .with_label_values(&[name])
             .inc_by(disk_usage.written_bytes as f64);
 
-        // Use min for start_time (earliest start time)
+        // Use min for start_time (earliest start time for this process name)
         let new_start_time = if current_start_time == 0.0 {
             process.start_time() as f64
         } else {
@@ -368,23 +328,45 @@ impl Metrics {
             .with_label_values(&[name])
             .set(new_start_time);
 
-        // Use max for run_time (longest running time)
+        // Use max for run_time (longest running time for this process name)
         let new_run_time = current_run_time.max(process.run_time() as f64);
         self.process_runtime
             .with_label_values(&[name])
             .set(new_run_time);
+    }
 
-        Ok(())
+    pub fn update_system_metrics(&self, system: MutexGuard<System>) {
+        // Reset process gauge metrics at the start of each collection cycle
+        self.reset_process_metrics();
+
+        // Update CPU usage per core
+        for (i, cpu) in system.cpus().iter().enumerate() {
+            self.update_cpu_usage(&i.to_string(), cpu.cpu_usage());
+        }
+
+        // Update memory metrics
+        self.update_memory_metrics(
+            system.total_memory(),
+            system.free_memory(),
+            system.available_memory(),
+            system.used_memory(),
+        );
+
+        // Update swap metrics
+        self.update_swap_metrics(system.total_swap(), system.free_swap(), system.used_swap());
+
+        // Update process metrics (aggregated by name)
+        for (_pid, process) in system.processes() {
+            if let Some(name) = process.name().to_str() {
+                self.update_process_metrics(name, process);
+            }
+        }
     }
 }
 
 /// Implementation for Network Metrics
 impl Metrics {
-    pub fn update_network_metrics(
-        &self,
-        interface_name: &str,
-        network: &sysinfo::NetworkData,
-    ) -> Result<(), Box<dyn std::error::Error>> {
+    pub fn update_network_metrics(&self, interface_name: &str, network: &sysinfo::NetworkData) {
         self.network_received_total
             .with_label_values(&[interface_name])
             .inc_by(network.received() as f64);
@@ -408,7 +390,5 @@ impl Metrics {
         self.network_errors_on_transmitted_total
             .with_label_values(&[interface_name])
             .inc_by(network.errors_on_transmitted() as f64);
-
-        Ok(())
     }
 }
