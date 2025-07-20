@@ -71,22 +71,6 @@ async fn metrics(State(state): State<Arc<AppState>>) -> impl IntoResponse {
 }
 
 fn try_get_metrics(state: Arc<AppState>) -> Result<Response, Box<dyn std::error::Error>> {
-    // Update system metrics
-    {
-        let mut system = state.system.lock().unwrap();
-        system.refresh_all();
-        state.metrics.update_system_metrics(system);
-    }
-
-    // Update network metrics
-    {
-        let mut networks = state.networks.lock().unwrap();
-        networks.refresh(false);
-        for (name, network) in networks.iter() {
-            state.metrics.update_network_metrics(name, network);
-        }
-    }
-
     // Encode the metrics as a string
     let mut buffer = vec![];
     let encoder = TextEncoder::new();
@@ -109,7 +93,12 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     tracing_subscriber::fmt::init();
 
     // Create the app state
-    let app_state = Arc::new(AppState::new()?);
+    let mut app_state = AppState::new()?;
+
+    // Start background metrics collection
+    app_state.start_background_metrics_collection()?;
+
+    let app_state = Arc::new(app_state);
 
     let app = Router::new()
         .route("/", get(home))
@@ -121,5 +110,6 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     println!("Listening on http://0.0.0.0:9184");
     axum::serve(listener, app).await?;
 
+    // Background task will be cleaned up when the process terminates
     Ok(())
 }
