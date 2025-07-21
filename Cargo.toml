@@ -4,7 +4,7 @@ version = "0.1.0"
 edition = "2021"
 
 [dependencies]
-sysinfo = "0.36.1"
+sysinfo = { git = "https://github.com/akashgurava/sysinfo" }
 tokio = { version = "1.46.1", features = ["rt", "macros", "sync"] }
 axum = "0.8"
 prometheus = "0.14"

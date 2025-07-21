@@ -657,8 +657,7 @@ checksum = "a7065abeca94b6a8a577f9bd45aa0867a2238b74e8eb67cf10d492bc39351394"
 [[package]]
 name = "sysinfo"
 version = "0.36.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "252800745060e7b9ffb7b2badbd8b31cfa4aa2e61af879d0a3bf2a317c20217d"
+source = "git+https://github.com/akashgurava/sysinfo#297f7acc61c47312a71aef1cb93e9be50a1e0824"
 dependencies = [
  "libc",
  "memchr",

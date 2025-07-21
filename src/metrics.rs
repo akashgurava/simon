@@ -1,12 +1,12 @@
 use std::sync::MutexGuard;
 
 use prometheus::{CounterVec, Gauge, GaugeVec, Opts, Registry};
-use sysinfo::System;
+use sysinfo::{Cpu, System};
 
 /// Struct containing all the metrics we're tracking
 pub struct Metrics {
-    /// CPU Usage percentage per core
-    cpu_usage: GaugeVec,
+    /// Total CPU seconds
+    cpu_seconds_total: CounterVec,
 
     /// Total physical memory in bytes
     memory_total: Gauge,
@@ -59,10 +59,10 @@ pub struct Metrics {
 impl Metrics {
     pub fn new(registry: &Registry) -> Result<Self, Box<dyn std::error::Error>> {
         // Define options for each metric
-        let cpu_usage_opts = Opts::new("usage_percentage", "CPU usage percentage per core")
+        let cpu_usage_opts = Opts::new("cpu_seconds_total", "Total CPU seconds")
             .namespace("simon")
             .subsystem("cpu");
-        let cpu_usage = GaugeVec::new(cpu_usage_opts, &["core"])?;
+        let cpu_seconds_total = CounterVec::new(cpu_usage_opts, &["core", "mode"])?;
 
         let memory_total_opts = Opts::new("total_bytes", "Total physical memory in bytes")
             .namespace("simon")
@@ -210,7 +210,7 @@ impl Metrics {
             CounterVec::new(network_errors_on_transmitted_total_opts, &["interface"])?;
 
         // Register all metrics with the provided registry
-        registry.register(Box::new(cpu_usage.clone()))?;
+        registry.register(Box::new(cpu_seconds_total.clone()))?;
         registry.register(Box::new(memory_total.clone()))?;
         registry.register(Box::new(memory_free.clone()))?;
         registry.register(Box::new(memory_available.clone()))?;
@@ -233,7 +233,7 @@ impl Metrics {
         registry.register(Box::new(network_errors_on_transmitted_total.clone()))?;
 
         Ok(Metrics {
-            cpu_usage,
+            cpu_seconds_total,
             memory_total,
             memory_free,
             memory_available,
@@ -260,8 +260,19 @@ impl Metrics {
 
 /// Implementation for System Metrics
 impl Metrics {
-    fn update_cpu_usage(&self, label: &str, value: f32) {
-        self.cpu_usage.with_label_values(&[label]).set(value.into());
+    fn update_cpu_usage(&self, label: &str, cpu: &Cpu) {
+        self.cpu_seconds_total
+            .with_label_values(&[label, "user"])
+            .inc_by(cpu.user() as f64);
+        self.cpu_seconds_total
+            .with_label_values(&[label, "system"])
+            .inc_by(cpu.system() as f64);
+        self.cpu_seconds_total
+            .with_label_values(&[label, "nice"])
+            .inc_by(cpu.nice() as f64);
+        self.cpu_seconds_total
+            .with_label_values(&[label, "idle"])
+            .inc_by(cpu.idle() as f64);
     }
 
     fn update_memory_metrics(&self, total: u64, free: u64, available: u64, used: u64) {
@@ -279,7 +290,6 @@ impl Metrics {
 
     fn reset_process_metrics(&self) {
         // Reset all process gauge metrics to 0
-        // Note: We don't reset counters (disk I/O) as they should accumulate
         self.process_cpu_usage.reset();
         self.process_memory.reset();
         self.process_virtual_memory.reset();
@@ -337,11 +347,11 @@ impl Metrics {
 
     pub fn update_system_metrics(&self, system: MutexGuard<System>) {
         // Reset process gauge metrics at the start of each collection cycle
-        self.reset_process_metrics();
 
+        self.cpu_seconds_total.reset();
         // Update CPU usage per core
         for (i, cpu) in system.cpus().iter().enumerate() {
-            self.update_cpu_usage(&i.to_string(), cpu.cpu_usage());
+            self.update_cpu_usage(&i.to_string(), cpu);
         }
 
         // Update memory metrics
@@ -355,6 +365,7 @@ impl Metrics {
         // Update swap metrics
         self.update_swap_metrics(system.total_swap(), system.free_swap(), system.used_swap());
 
+        self.reset_process_metrics();
         // Update process metrics (aggregated by name)
         for (_pid, process) in system.processes() {
             if let Some(name) = process.name().to_str() {
