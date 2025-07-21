@@ -119,15 +119,20 @@ curl http://localhost:9184/metrics
 ### CPU Metrics
 
 ```
-# CPU usage metrics as counters
-simon_cpu_user_total{core="0"} 152354
-simon_cpu_system_total{core="0"} 89756
-simon_cpu_idle_total{core="0"} 845673
-simon_cpu_iowait_total{core="0"} 1234
-simon_cpu_irq_total{core="0"} 567
-simon_cpu_softirq_total{core="0"} 2345
-simon_cpu_steal_total{core="0"} 12
-simon_cpu_guest_total{core="0"} 0
+# HELP simon_cpu_cpu_seconds_total CPU time in seconds by mode
+# TYPE simon_cpu_cpu_seconds_total counter
+
+# CPU usage metrics as counters with mode label
+simon_cpu_cpu_seconds_total{core="0",mode="user"} 152354
+simon_cpu_cpu_seconds_total{core="0",mode="nice"} 2301
+simon_cpu_cpu_seconds_total{core="0",mode="system"} 89756
+simon_cpu_cpu_seconds_total{core="0",mode="idle"} 845673
+simon_cpu_cpu_seconds_total{core="0",mode="iowait"} 1234
+simon_cpu_cpu_seconds_total{core="0",mode="irq"} 567
+simon_cpu_cpu_seconds_total{core="0",mode="softirq"} 2345
+simon_cpu_cpu_seconds_total{core="0",mode="steal"} 12
+simon_cpu_cpu_seconds_total{core="0",mode="guest"} 0
+simon_cpu_cpu_seconds_total{core="0",mode="guest_nice"} 0
 ```
 
 ### Memory Metrics
@@ -231,23 +236,28 @@ Example Grafana queries:
 ```promql
 # CPU usage by core (as percentage)
 100 * (
-  rate(simon_cpu_user_total{core="0"}[1m]) +
-  rate(simon_cpu_system_total{core="0"}[1m]) +
-  rate(simon_cpu_irq_total{core="0"}[1m]) +
-  rate(simon_cpu_softirq_total{core="0"}[1m])
+  rate(simon_cpu_cpu_seconds_total{core="0",mode="user"}[1m]) +
+  rate(simon_cpu_cpu_seconds_total{core="0",mode="system"}[1m]) +
+  rate(simon_cpu_cpu_seconds_total{core="0",mode="irq"}[1m]) +
+  rate(simon_cpu_cpu_seconds_total{core="0",mode="softirq"}[1m])
 ) / (
-  rate(simon_cpu_user_total{core="0"}[1m]) +
-  rate(simon_cpu_system_total{core="0"}[1m]) +
-  rate(simon_cpu_irq_total{core="0"}[1m]) +
-  rate(simon_cpu_softirq_total{core="0"}[1m]) +
-  rate(simon_cpu_idle_total{core="0"}[1m])
+  rate(simon_cpu_cpu_seconds_total{core="0",mode="user"}[1m]) +
+  rate(simon_cpu_cpu_seconds_total{core="0",mode="system"}[1m]) +
+  rate(simon_cpu_cpu_seconds_total{core="0",mode="irq"}[1m]) +
+  rate(simon_cpu_cpu_seconds_total{core="0",mode="softirq"}[1m]) +
+  rate(simon_cpu_cpu_seconds_total{core="0",mode="idle"}[1m])
 )
 
 # System CPU usage (simpler formula)
-rate(simon_cpu_system_total{core="0"}[1m]) / (
-  rate(simon_cpu_system_total{core="0"}[1m]) +
-  rate(simon_cpu_idle_total{core="0"}[1m])
+rate(simon_cpu_cpu_seconds_total{core="0",mode="system"}[1m]) / (
+  rate(simon_cpu_cpu_seconds_total{core="0",mode="system"}[1m]) +
+  rate(simon_cpu_cpu_seconds_total{core="0",mode="idle"}[1m])
 )
+
+# Total usage per core (alternate method using mode selector)
+sum by(core) (rate(simon_cpu_cpu_seconds_total{core="0",mode!="idle"}[1m])) /
+sum by(core) (rate(simon_cpu_cpu_seconds_total{core="0"}[1m]))
+
 
 # Memory usage percentage
 (simon_memory_used_bytes / simon_memory_total_bytes) * 100

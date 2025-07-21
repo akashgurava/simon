@@ -33,16 +33,16 @@ get_cpu_stats() {
         iowait=${iowait:-0}; irq=${irq:-0}; softirq=${softirq:-0}; steal=${steal:-0}
         guest=${guest:-0}; guest_nice=${guest_nice:-0}
         core_num=$(echo "$core" | sed 's/cpu//')
-        echo "simon_cpu_user_total{core=\"$core_num\"} $user"
-        echo "simon_cpu_nice_total{core=\"$core_num\"} $nice"
-        echo "simon_cpu_system_total{core=\"$core_num\"} $system"
-        echo "simon_cpu_idle_total{core=\"$core_num\"} $idle"
-        echo "simon_cpu_iowait_total{core=\"$core_num\"} $iowait"
-        echo "simon_cpu_irq_total{core=\"$core_num\"} $irq"
-        echo "simon_cpu_softirq_total{core=\"$core_num\"} $softirq"
-        echo "simon_cpu_steal_total{core=\"$core_num\"} $steal"
-        echo "simon_cpu_guest_total{core=\"$core_num\"} $guest"
-        echo "simon_cpu_guest_nice_total{core=\"$core_num\"} $guest_nice"
+        echo "simon_cpu_cpu_seconds_total{core=\"$core_num\",mode=\"user\"} $user"
+        echo "simon_cpu_cpu_seconds_total{core=\"$core_num\",mode=\"nice\"} $nice"
+        echo "simon_cpu_cpu_seconds_total{core=\"$core_num\",mode=\"system\"} $system"
+        echo "simon_cpu_cpu_seconds_total{core=\"$core_num\",mode=\"idle\"} $idle"
+        echo "simon_cpu_cpu_seconds_total{core=\"$core_num\",mode=\"iowait\"} $iowait"
+        echo "simon_cpu_cpu_seconds_total{core=\"$core_num\",mode=\"irq\"} $irq"
+        echo "simon_cpu_cpu_seconds_total{core=\"$core_num\",mode=\"softirq\"} $softirq"
+        echo "simon_cpu_cpu_seconds_total{core=\"$core_num\",mode=\"steal\"} $steal"
+        echo "simon_cpu_cpu_seconds_total{core=\"$core_num\",mode=\"guest\"} $guest"
+        echo "simon_cpu_cpu_seconds_total{core=\"$core_num\",mode=\"guest_nice\"} $guest_nice"
     done
 }
 
