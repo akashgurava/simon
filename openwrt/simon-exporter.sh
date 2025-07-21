@@ -54,6 +54,15 @@ serve_metrics() {
     printf "# HELP simon_temp_celsius Temperature in Celsius\n"
     printf "# TYPE simon_temp_celsius gauge\n"
     printf "\n"
+    printf "# HELP simon_tx_bytes_total Total bytes transmitted by device (internet + local)\n"
+    printf "# TYPE simon_tx_bytes_total counter\n"
+    printf "# HELP simon_rx_bytes_total Total bytes received by device (internet + local)\n"
+    printf "# TYPE simon_rx_bytes_total counter\n"
+    printf "# HELP simon_local_tx_bytes_total Bytes transmitted to specific local destination\n"
+    printf "# TYPE simon_local_tx_bytes_total counter\n"
+    printf "# HELP simon_local_rx_bytes_total Bytes received from specific local source\n"
+    printf "# TYPE simon_local_rx_bytes_total counter\n"
+    printf "\n"
     
     # Serve metrics if file exists
     if [ -f "$metrics_file" ]; then

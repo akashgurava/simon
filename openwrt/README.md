@@ -10,6 +10,11 @@ A lightweight, high-performance system monitoring solution designed specifically
 - **Temperature Monitoring**: Auto-discovers and monitors all available temperature sensors
 - **Per-Core CPU Stats**: Individual CPU core raw counters for detailed monitoring
 - **Detailed Memory Stats**: Total, free, available, used, buffers, and cached memory
+- **Per-IP Bandwidth Monitoring**: Real-time bandwidth tracking per device using nf_conntrack
+- **NAT-Aware Traffic Analysis**: Properly handles router NAT for accurate device attribution
+- **Local vs Internet Traffic Separation**: Distinguishes between local network and internet traffic
+- **Device Metadata Integration**: Includes hostname, user, category, and OS labels from DHCP
+- **Detailed Local Traffic Flow**: Shows which devices communicate with each other locally
 - **HTTP API**: Built-in HTTP server for metric exposure
 - **OpenWrt Integration**: Native init.d script with procd support
 - **Background Operation**: Runs continuously as system daemon
@@ -24,7 +29,7 @@ A lightweight, high-performance system monitoring solution designed specifically
 │ • CPU Stats     │    │ metrics.prom     │    │ :9184/metrics   │
 │ • Memory Stats  │    │                  │    │                 │
 │ • Temperature   │    │                  │    │ Prometheus      │
-│                 │    │                  │    │ Compatible      │
+│ • Network Stats │    │                  │    │ Compatible      │
 │                 │    │                  │    │                 │
 └─────────────────┘    └──────────────────┘    └─────────────────┘
 ```
@@ -162,6 +167,44 @@ simon_memory_used_bytes 345678901
 # TYPE simon_temp_celsius gauge
 simon_temp_celsius{sensor="class_thermal_thermal_zone0"} 45.2
 simon_temp_celsius{sensor="class_hwmon_hwmon0_temp1"} 42.8
+```
+
+### Network Bandwidth Metrics
+
+Simon provides comprehensive per-device bandwidth monitoring with detailed local traffic analysis:
+
+#### Total Traffic Metrics (Internet + Local)
+
+```
+# HELP simon_tx_bytes_total Total bytes transmitted by device (internet + local)
+# TYPE simon_tx_bytes_total counter
+
+# HELP simon_rx_bytes_total Total bytes received by device (internet + local)
+# TYPE simon_rx_bytes_total counter
+
+# Total bandwidth usage per device with metadata labels
+simon_tx_bytes_total{ip="192.168.1.21",hostname="swathi-dell",user="swathi",cat="work",os="windows"} 59260
+simon_rx_bytes_total{ip="192.168.1.21",hostname="swathi-dell",user="swathi",cat="work",os="windows"} 108369
+
+simon_tx_bytes_total{ip="192.168.1.1",hostname="asus",user="home",cat="personal",os="openwrt"} 234567
+simon_rx_bytes_total{ip="192.168.1.1",hostname="asus",user="home",cat="personal",os="openwrt"} 345678
+```
+
+#### Detailed Local Traffic Metrics (Device-to-Device)
+
+```
+# HELP simon_local_tx_bytes_total Bytes transmitted to specific local destination
+# TYPE simon_local_tx_bytes_total counter
+
+# HELP simon_local_rx_bytes_total Bytes received from specific local source
+# TYPE simon_local_rx_bytes_total counter
+
+# Local traffic between specific devices
+simon_local_tx_bytes_total{ip="192.168.1.21",hostname="swathi-dell",user="swathi",cat="work",os="windows",dst_ip="192.168.1.1",dst_hostname="asus"} 12136
+simon_local_rx_bytes_total{ip="192.168.1.21",hostname="swathi-dell",user="swathi",cat="work",os="windows",src_ip="192.168.1.1",src_hostname="asus"} 16141
+
+simon_local_tx_bytes_total{ip="192.168.1.10",hostname="akash-mac",user="akash",cat="personal",os="mac",dst_ip="192.168.1.15",dst_hostname="nas-server"} 1048576
+simon_local_rx_bytes_total{ip="192.168.1.15",hostname="nas-server",user="home",cat="personal",os="linux",src_ip="192.168.1.10",src_hostname="akash-mac"} 1048576
 ```
 
 ## Configuration
