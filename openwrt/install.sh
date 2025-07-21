@@ -18,6 +18,47 @@ if [ "$(id -u)" -ne 0 ]; then
     exit 1
 fi
 
+# Stop any existing services first
+echo "Stopping any existing services..."
+if [ -f "$INIT_DIR/simon-monitor" ]; then
+    $INIT_DIR/simon-monitor stop 2>/dev/null || true
+    echo "  ✓ Stopped init service"
+fi
+
+if [ -f "$INSTALL_DIR/simon-monitor" ]; then
+    $INSTALL_DIR/simon-monitor stop 2>/dev/null || true
+    echo "  ✓ Stopped monitor service"
+fi
+
+if [ -f "$INSTALL_DIR/simon-exporter" ]; then
+    $INSTALL_DIR/simon-exporter stop 2>/dev/null || true
+    echo "  ✓ Stopped exporter service"
+fi
+
+# Check for required HTTP server capability
+echo "Checking HTTP server capability..."
+HTTP_SERVER_FOUND=false
+
+if which nc >/dev/null 2>&1; then
+    echo "  ✓ Found netcat (nc)"
+    HTTP_SERVER_FOUND=true
+fi
+
+if which socat >/dev/null 2>&1; then
+    echo "  ✓ Found socat (preferred)"
+    HTTP_SERVER_FOUND=true
+fi
+
+if [ "$HTTP_SERVER_FOUND" = "false" ]; then
+    echo "ERROR: Neither netcat (nc) nor socat is installed"
+    echo "Please install one of them first:"
+    echo "  opkg update"
+    echo "  opkg install netcat" 
+    echo "  or"
+    echo "  opkg install socat (recommended)"
+    exit 1
+fi
+
 # Function to install file with permissions
 install_file() {
     local src_file="$1"
@@ -235,7 +276,7 @@ fi
 # Test port availability
 echo ""
 echo "7. Testing network configuration..."
-HTTP_PORT=9090
+HTTP_PORT=9184
 
 if command -v netstat >/dev/null 2>&1; then
     if netstat -ln 2>/dev/null | grep -q ":$HTTP_PORT "; then
@@ -328,7 +369,7 @@ echo ""
 echo "Usage:"
 echo "  • Manual control: /etc/init.d/simon-monitor {start|stop|restart|status}"
 echo "  • Prometheus endpoint: http://$(uci get network.lan.ipaddr 2>/dev/null || echo "your-ip"):$HTTP_PORT/metrics"
-echo "  • Available intervals: ?interval=1,5,10,15,30 (seconds)"
+echo "  • Metrics updated every second"
 echo ""
 echo "Examples:"
 echo "  # Check status"
@@ -336,11 +377,11 @@ echo "  /etc/init.d/simon-monitor status"
 echo ""
 echo "  # View metrics"
 echo "  curl 'http://localhost:$HTTP_PORT/metrics'"
-echo "  curl 'http://localhost:$HTTP_PORT/metrics?interval=30'"
+echo "Example: curl 'http://localhost:$HTTP_PORT/metrics'"
 echo ""
-echo "  # View raw metric files"
+echo "  # View raw metric file"
 echo "  ls /tmp/simon-metrics/"
-echo "  cat /tmp/simon-metrics/metrics_1s.prom"
+echo "  cat /tmp/simon-metrics/metrics.prom"
 echo ""
 
 # Test the installation
@@ -348,11 +389,11 @@ echo "Testing installation..."
 echo "Waiting 10 seconds for metrics generation..."
 sleep 10
 
-if [ -f "/tmp/simon-metrics/metrics_1s.prom" ]; then
+if [ -f "/tmp/simon-metrics/metrics.prom" ]; then
     echo "✓ Metrics file created successfully"
     echo ""
     echo "Sample metrics:"
-    head -20 "/tmp/simon-metrics/metrics_1s.prom" | grep -E "(simon_cpu_usage|simon_memory)" | head -5
+    head -20 "/tmp/simon-metrics/metrics.prom" | grep -E "(simon_cpu|simon_memory)" | head -5
     echo "..."
 else
     echo "! Metrics file not found - check logs:"
@@ -364,7 +405,7 @@ fi
 echo ""
 echo "Final HTTP server test..."
 if command -v curl >/dev/null 2>&1; then
-    if timeout 5 curl -s "http://localhost:$HTTP_PORT/metrics?interval=1" | head -10; then
+    if timeout 5 curl -s "http://localhost:$HTTP_PORT/metrics" | head -10; then
         echo ""
         echo "✓ HTTP server is working correctly"
     else

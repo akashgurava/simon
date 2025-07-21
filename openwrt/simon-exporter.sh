@@ -7,7 +7,7 @@ EXPORTER_NAME="simon-exporter"
 PID_FILE="/var/run/${EXPORTER_NAME}.pid"
 DATA_DIR="/tmp/simon-metrics"
 LOG_FILE="/var/log/${EXPORTER_NAME}.log"
-HTTP_PORT="${SIMON_PORT:-9090}"
+HTTP_PORT="${SIMON_PORT:-9184}"
 
 # Logging function
 log() {
@@ -25,8 +25,7 @@ trap cleanup TERM INT
 
 # Function to serve HTTP response
 serve_metrics() {
-    local interval="${1:-1}"
-    local metrics_file="$DATA_DIR/metrics_${interval}s.prom"
+    local metrics_file="$DATA_DIR/metrics.prom"
     
     # HTTP headers
     printf "HTTP/1.1 200 OK\r\n"
@@ -36,8 +35,24 @@ serve_metrics() {
     printf "\r\n"
     
     # Prometheus metrics headers
-    printf "# HELP simon_cpu_usage_percentage CPU usage percentage per core\n"
-    printf "# TYPE simon_cpu_usage_percentage gauge\n"
+    printf "# HELP simon_cpu_user_total CPU user time counter\n"
+    printf "# TYPE simon_cpu_user_total counter\n"
+    printf "# HELP simon_cpu_system_total CPU system time counter\n"
+    printf "# TYPE simon_cpu_system_total counter\n"
+    printf "# HELP simon_cpu_idle_total CPU idle time counter\n"
+    printf "# TYPE simon_cpu_idle_total counter\n"
+    printf "# HELP simon_cpu_iowait_total CPU iowait time counter\n"
+    printf "# TYPE simon_cpu_iowait_total counter\n"
+    printf "# HELP simon_cpu_irq_total CPU irq time counter\n"
+    printf "# TYPE simon_cpu_irq_total counter\n"
+    printf "# HELP simon_cpu_softirq_total CPU softirq time counter\n"
+    printf "# TYPE simon_cpu_softirq_total counter\n"
+    printf "# HELP simon_cpu_steal_total CPU steal time counter\n"
+    printf "# TYPE simon_cpu_steal_total counter\n"
+    printf "# HELP simon_cpu_guest_total CPU guest time counter\n"
+    printf "# TYPE simon_cpu_guest_total counter\n"
+    printf "# HELP simon_cpu_guest_nice_total CPU guest nice time counter\n"
+    printf "# TYPE simon_cpu_guest_nice_total counter\n"
     printf "\n"
     printf "# HELP simon_memory_total_bytes Total physical memory in bytes\n"
     printf "# TYPE simon_memory_total_bytes gauge\n"
@@ -75,23 +90,13 @@ serve_metrics() {
     printf "simon_exporter_last_scrape %s\n" "$(date +%s)"
 }
 
-# Function to handle HTTP request and extract interval parameter
+# Function to handle HTTP request
 handle_http_request() {
     local request_line=""
-    local interval="1"
     
     # Read the request line
     read -r request_line
     log "Request: $request_line"
-    
-    # Parse URL parameters for interval
-    case "$request_line" in
-        *"interval=5"*) interval="5" ;;
-        *"interval=10"*) interval="10" ;;
-        *"interval=15"*) interval="15" ;;
-        *"interval=30"*) interval="30" ;;
-        *) interval="1" ;;
-    esac
     
     # Consume remaining headers
     while read -r header && [ -n "$header" ] && [ "$header" != "$(printf '\r')" ]; do
@@ -99,7 +104,7 @@ handle_http_request() {
     done
     
     # Serve the metrics
-    serve_metrics "$interval"
+    serve_metrics
 }
 
 # HTTP server using netcat (busybox version)
@@ -212,7 +217,6 @@ start_exporter() {
         echo $! > "$PID_FILE"
         log "Exporter started with PID: $! on port $HTTP_PORT using $server_method"
         echo "Exporter started successfully on http://localhost:$HTTP_PORT/metrics"
-        echo "Use ?interval=N parameter for different time intervals (1,5,10,15,30)"
     fi
 }
 
@@ -255,8 +259,6 @@ status_exporter() {
         if kill -0 "$pid" 2>/dev/null; then
             echo "$EXPORTER_NAME is running (PID: $pid)"
             echo "HTTP endpoint: http://localhost:$HTTP_PORT/metrics"
-            echo "Available intervals: 1s, 5s, 10s, 15s, 30s"
-            echo "Example: curl 'http://localhost:$HTTP_PORT/metrics?interval=5'"
             echo "Server method: $(detect_server_method)"
         else
             echo "$EXPORTER_NAME is not running (stale PID file)"
@@ -269,11 +271,10 @@ status_exporter() {
 
 # Function to test metrics
 test_metrics() {
-    local interval="${1:-1}"
-    echo "Testing metrics endpoint (interval=${interval}s)..."
+    echo "Testing metrics endpoint..."
     echo "Server detection: $(detect_server_method)"
     echo ""
-    serve_metrics "$interval"
+    serve_metrics
 }
 
 # Main script logic
@@ -303,16 +304,16 @@ case "$1" in
         handle_request_internal
         ;;
     *)
-        echo "Usage: $0 {start|stop|restart|status|test [interval]|daemon}"
+        echo "Usage: $0 {start|stop|restart|status|test|daemon}"
         echo "  start   - Start the Prometheus exporter"
         echo "  stop    - Stop the Prometheus exporter"
         echo "  restart - Restart the Prometheus exporter"
         echo "  status  - Check exporter status"
-        echo "  test    - Test metrics output (optional interval: 1,5,10,15,30)"
+        echo "  test    - Test metrics output"
         echo "  daemon  - Run in daemon mode (direct execution)"
         echo ""
         echo "Environment variables:"
-        echo "  SIMON_PORT - HTTP port (default: 9090)"
+        echo "  SIMON_PORT - HTTP port (default: 9184)"
         exit 1
         ;;
 esac

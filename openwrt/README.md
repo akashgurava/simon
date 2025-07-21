@@ -1,14 +1,14 @@
 # Simon System Monitor for OpenWrt
 
-A lightweight, high-performance system monitoring solution designed specifically for OpenWrt routers and embedded devices. Provides real-time CPU, memory, and temperature metrics in Prometheus format with multiple time intervals.
+A lightweight, high-performance system monitoring solution designed specifically for OpenWrt routers and embedded devices. Provides real-time CPU, memory, and temperature metrics in Prometheus format.
 
 ## Features
 
-- **Multi-interval Monitoring**: Collects metrics at 1s, 5s, 10s, 15s, and 30s intervals
+- **Real-time Monitoring**: Collects metrics every second
 - **Prometheus Compatible**: Native Prometheus format with proper HELP and TYPE headers
 - **Low Resource Usage**: Designed for resource-constrained embedded devices
 - **Temperature Monitoring**: Auto-discovers and monitors all available temperature sensors
-- **Per-Core CPU Stats**: Individual CPU core usage percentages
+- **Per-Core CPU Stats**: Individual CPU core raw counters for detailed monitoring
 - **Detailed Memory Stats**: Total, free, available, used, buffers, and cached memory
 - **HTTP API**: Built-in HTTP server for metric exposure
 - **OpenWrt Integration**: Native init.d script with procd support
@@ -18,14 +18,14 @@ A lightweight, high-performance system monitoring solution designed specifically
 
 ```
 ┌─────────────────┐    ┌──────────────────┐    ┌─────────────────┐
-│  simon-monitor  │    │   Metric Files   │    │ simon-exporter  │
+│  simon-monitor  │    │   Metric File    │    │ simon-exporter  │
 │   (Data Collector) ──▶│ /tmp/simon-metrics/ ──▶│  (HTTP Server)   │
 │                 │    │                  │    │                 │
-│ • CPU Stats     │    │ metrics_1s.prom  │    │ :9090/metrics   │
-│ • Memory Stats  │    │ metrics_5s.prom  │    │                 │
-│ • Temperature   │    │ metrics_10s.prom │    │ Prometheus      │
-│                 │    │ metrics_15s.prom │    │ Compatible      │
-│                 │    │ metrics_30s.prom │    │                 │
+│ • CPU Stats     │    │ metrics.prom     │    │ :9184/metrics   │
+│ • Memory Stats  │    │                  │    │                 │
+│ • Temperature   │    │                  │    │ Prometheus      │
+│                 │    │                  │    │ Compatible      │
+│                 │    │                  │    │                 │
 └─────────────────┘    └──────────────────┘    └─────────────────┘
 ```
 
@@ -53,7 +53,7 @@ A lightweight, high-performance system monitoring solution designed specifically
 3. **Verify installation**:
    ```bash
    /etc/init.d/simon-monitor status
-   curl http://localhost:9090/metrics
+   curl http://localhost:9184/metrics
    ```
 
 ### Manual Installation
@@ -107,17 +107,11 @@ chmod 755 /etc/init.d/simon-monitor
 ### Accessing Metrics
 
 ```bash
-# Get current metrics (1-second interval)
-curl http://localhost:9090/metrics
-
-# Get 5-second interval metrics
-curl "http://localhost:9090/metrics?interval=5"
-
-# Get 30-second interval metrics
-curl "http://localhost:9090/metrics?interval=30"
+# Get current metrics
+curl http://localhost:9184/metrics
 
 # Test metrics output
-/usr/bin/simon-exporter test 5
+/usr/bin/simon-exporter test
 ```
 
 ## Metric Examples
@@ -125,12 +119,15 @@ curl "http://localhost:9090/metrics?interval=30"
 ### CPU Metrics
 
 ```
-# HELP simon_cpu_usage_percentage CPU usage percentage per core
-# TYPE simon_cpu_usage_percentage gauge
-simon_cpu_usage_percentage{core="0"} 15.23
-simon_cpu_usage_percentage{core="1"} 8.45
-simon_cpu_usage_percentage{core="2"} 12.67
-simon_cpu_usage_percentage{core="3"} 5.89
+# CPU usage metrics as counters
+simon_cpu_user_total{core="0"} 152354
+simon_cpu_system_total{core="0"} 89756
+simon_cpu_idle_total{core="0"} 845673
+simon_cpu_iowait_total{core="0"} 1234
+simon_cpu_irq_total{core="0"} 567
+simon_cpu_softirq_total{core="0"} 2345
+simon_cpu_steal_total{core="0"} 12
+simon_cpu_guest_total{core="0"} 0
 ```
 
 ### Memory Metrics
@@ -180,11 +177,11 @@ Create `/etc/simon-monitor.conf` for persistent configuration:
 
 ```bash
 # HTTP server settings
-HTTP_PORT=9090
+HTTP_PORT=9184
 BIND_ADDRESS="0.0.0.0"
 
-# Collection intervals
-METRIC_INTERVALS="1 5 10 15 30"
+# Collection rate
+# Metrics are collected every second
 
 # Enable/disable features
 ENABLE_CPU_MONITORING=true
@@ -203,11 +200,7 @@ ENABLE_TEMPERATURE_MONITORING=true
 └── simon-monitor          # OpenWrt init script
 
 /tmp/simon-metrics/        # Metric storage (runtime)
-├── metrics_1s.prom        # 1-second interval metrics
-├── metrics_5s.prom        # 5-second interval metrics
-├── metrics_10s.prom       # 10-second interval metrics
-├── metrics_15s.prom       # 15-second interval metrics
-└── metrics_30s.prom       # 30-second interval metrics
+└── metrics.prom           # Metrics file (updated every second)
 
 /var/log/
 ├── simon-monitor.log      # Monitor daemon logs
@@ -226,11 +219,9 @@ Add to your `prometheus.yml`:
 scrape_configs:
   - job_name: "openwrt-simon"
     static_configs:
-      - targets: ["your-openwrt-ip:9090"]
+      - targets: ["your-openwrt-ip:9184"]
     scrape_interval: 30s
     metrics_path: /metrics
-    params:
-      interval: ["30"] # Use 30-second metrics
 ```
 
 ## Grafana Dashboard
@@ -238,8 +229,25 @@ scrape_configs:
 Example Grafana queries:
 
 ```promql
-# CPU usage by core
-simon_cpu_usage_percentage
+# CPU usage by core (as percentage)
+100 * (
+  rate(simon_cpu_user_total{core="0"}[1m]) +
+  rate(simon_cpu_system_total{core="0"}[1m]) +
+  rate(simon_cpu_irq_total{core="0"}[1m]) +
+  rate(simon_cpu_softirq_total{core="0"}[1m])
+) / (
+  rate(simon_cpu_user_total{core="0"}[1m]) +
+  rate(simon_cpu_system_total{core="0"}[1m]) +
+  rate(simon_cpu_irq_total{core="0"}[1m]) +
+  rate(simon_cpu_softirq_total{core="0"}[1m]) +
+  rate(simon_cpu_idle_total{core="0"}[1m])
+)
+
+# System CPU usage (simpler formula)
+rate(simon_cpu_system_total{core="0"}[1m]) / (
+  rate(simon_cpu_system_total{core="0"}[1m]) +
+  rate(simon_cpu_idle_total{core="0"}[1m])
+)
 
 # Memory usage percentage
 (simon_memory_used_bytes / simon_memory_total_bytes) * 100
@@ -287,7 +295,7 @@ ls -la /tmp/simon-metrics/
 
 # Test HTTP server
 /usr/bin/simon-exporter test
-curl http://localhost:9090/metrics
+curl http://localhost:9184/metrics
 ```
 
 ### Common Issues
@@ -295,8 +303,8 @@ curl http://localhost:9090/metrics
 **Port already in use:**
 
 ```bash
-# Check what's using port 9090
-netstat -tlnp | grep :9090
+# Check what's using port 9184
+netstat -tlnp | grep :9184
 
 # Use different port
 export SIMON_PORT=9091
@@ -349,14 +357,13 @@ opkg install busybox
 /usr/bin/simon-monitor daemon
 
 # Test individual functions
-/usr/bin/simon-exporter test 1
+/usr/bin/simon-exporter test
 ```
 
 ### Customization
 
 The scripts are designed to be easily customizable. Key areas:
 
-- **Metric intervals**: Modify `INTERVALS` variable
 - **Data collection**: Edit `get_*_stats()` functions
 - **Output format**: Modify `write_metrics()` function
 - **HTTP server**: Customize `serve_metrics()` function
@@ -379,11 +386,11 @@ Contributions welcome! Please:
 
 For issues and questions:
 
-1. Check the logs first
-2. Verify system compatibility
-3. Test individual components
-4. Check network connectivity
-5. Review configuration
+1. Check the logs first: `tail -f /var/log/simon-*.log`
+2. Verify system compatibility: `/usr/bin/simon-monitor` should run without errors
+3. Test individual components: `/usr/bin/simon-exporter test`
+4. Check network connectivity: `curl http://localhost:9184/metrics`
+5. Check dependencies: `which nc socat`
 
 ---
 

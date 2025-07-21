@@ -13,7 +13,7 @@ PROG_MONITOR="/usr/bin/simon-monitor"
 PROG_EXPORTER="/usr/bin/simon-exporter"
 
 # Configuration
-HTTP_PORT=9090
+HTTP_PORT=9184
 DATA_DIR="/tmp/simon-metrics"
 
 start_service() {

@@ -1,16 +1,12 @@
 #!/bin/sh
 
 # System Monitor Daemon for OpenWrt
-# Collects CPU, Memory, and Temperature metrics at various intervals
-# Author: Generated for OpenWrt monitoring
+# Collects CPU, Memory, and Temperature metrics every second and writes to a file.
 
 DAEMON_NAME="simon-monitor"
 PID_FILE="/var/run/${DAEMON_NAME}.pid"
 DATA_DIR="/tmp/simon-metrics"
 LOG_FILE="/var/log/${DAEMON_NAME}.log"
-
-# Metric intervals (in seconds)
-INTERVALS="1 5 10 15 30"
 
 # Create data directory
 mkdir -p "$DATA_DIR"
@@ -33,36 +29,21 @@ trap cleanup TERM INT
 # Function to get CPU stats
 get_cpu_stats() {
     grep "^cpu[0-9]" /proc/stat | while IFS=' ' read -r core user nice system idle iowait irq softirq steal guest guest_nice; do
-        # Handle missing fields
         user=${user:-0}; nice=${nice:-0}; system=${system:-0}; idle=${idle:-0}
         iowait=${iowait:-0}; irq=${irq:-0}; softirq=${softirq:-0}; steal=${steal:-0}
         guest=${guest:-0}; guest_nice=${guest_nice:-0}
-        
-        # Calculate totals
-        total=$((user + nice + system + idle + iowait + irq + softirq + steal))
-        active=$((user + nice + system + iowait + irq + softirq + steal))
-        
-        echo "$core $total $active"
+        core_num=$(echo "$core" | sed 's/cpu//')
+        echo "simon_cpu_user_total{core=\"$core_num\"} $user"
+        echo "simon_cpu_nice_total{core=\"$core_num\"} $nice"
+        echo "simon_cpu_system_total{core=\"$core_num\"} $system"
+        echo "simon_cpu_idle_total{core=\"$core_num\"} $idle"
+        echo "simon_cpu_iowait_total{core=\"$core_num\"} $iowait"
+        echo "simon_cpu_irq_total{core=\"$core_num\"} $irq"
+        echo "simon_cpu_softirq_total{core=\"$core_num\"} $softirq"
+        echo "simon_cpu_steal_total{core=\"$core_num\"} $steal"
+        echo "simon_cpu_guest_total{core=\"$core_num\"} $guest"
+        echo "simon_cpu_guest_nice_total{core=\"$core_num\"} $guest_nice"
     done
-}
-
-# Function to calculate CPU usage percentage
-calculate_cpu_usage() {
-    local core="$1"
-    local prev_total="$2"
-    local prev_active="$3"
-    local curr_total="$4"
-    local curr_active="$5"
-    
-    local total_diff=$((curr_total - prev_total))
-    local active_diff=$((curr_active - prev_active))
-    
-    if [ "$total_diff" -gt 0 ]; then
-        # Use awk for floating point calculation
-        awk "BEGIN { printf \"%.2f\", ($active_diff * 100.0) / $total_diff }"
-    else
-        echo "0.00"
-    fi
 }
 
 # Function to get memory stats
@@ -121,27 +102,11 @@ get_temperature_stats() {
 
 # Function to write metrics to file
 write_metrics() {
-    local interval="$1"
-    local timestamp="$2"
-    local metrics_file="$DATA_DIR/metrics_${interval}s.prom"
+    local timestamp="$(date +%s)"
+    local metrics_file="$DATA_DIR/metrics.prom"
     
-    # Write CPU metrics
-    if [ -f "$DATA_DIR/cpu_current" ] && [ -f "$DATA_DIR/cpu_previous" ]; then
-        while IFS=' ' read -r core curr_total curr_active; do
-            # Find corresponding previous values
-            prev_line=$(grep "^$core " "$DATA_DIR/cpu_previous" 2>/dev/null)
-            if [ -n "$prev_line" ]; then
-                prev_total=$(echo "$prev_line" | cut -d' ' -f2)
-                prev_active=$(echo "$prev_line" | cut -d' ' -f3)
-                
-                # Calculate usage percentage
-                usage=$(calculate_cpu_usage "$core" "$prev_total" "$prev_active" "$curr_total" "$curr_active")
-                core_num=$(echo "$core" | sed 's/cpu//')
-                
-                echo "simon_cpu_usage_percentage{core=\"$core_num\"} $usage" >> "$metrics_file.tmp"
-            fi
-        done < "$DATA_DIR/cpu_current"
-    fi
+    # Write CPU metrics (raw counters)
+    get_cpu_stats >> "$metrics_file.tmp"
     
     # Write memory metrics
     get_memory_stats | while read metric_name value; do
@@ -156,7 +121,7 @@ write_metrics() {
     
     # Add timestamp and move to final location
     echo "# Generated at: $(date)" > "$metrics_file"
-    echo "# Interval: ${interval}s" >> "$metrics_file"
+    echo "# Timestamp: $timestamp" >> "$metrics_file"
     if [ -f "$metrics_file.tmp" ]; then
         cat "$metrics_file.tmp" >> "$metrics_file"
         rm -f "$metrics_file.tmp"
@@ -167,26 +132,9 @@ write_metrics() {
 run_daemon() {
     log "Starting daemon..."
     
-    # Initialize CPU stats
-    get_cpu_stats > "$DATA_DIR/cpu_previous"
-    
-    local counter=0
-    
     while true; do
-        counter=$((counter + 1))
-        
-        # Get current CPU stats
-        get_cpu_stats > "$DATA_DIR/cpu_current"
-        
-        # Check which intervals to write
-        for interval in $INTERVALS; do
-            if [ $((counter % interval)) -eq 0 ]; then
-                write_metrics "$interval" "$(date +%s)"
-            fi
-        done
-        
-        # Copy current to previous for next iteration
-        cp "$DATA_DIR/cpu_current" "$DATA_DIR/cpu_previous"
+        # Write metrics once per second
+        write_metrics
         
         sleep 1
     done
@@ -250,8 +198,8 @@ status_daemon() {
         if kill -0 "$pid" 2>/dev/null; then
             echo "$DAEMON_NAME is running (PID: $pid)"
             echo "Data directory: $DATA_DIR"
-            echo "Available metric files:"
-            ls -la "$DATA_DIR"/metrics_*.prom 2>/dev/null || echo "  No metric files found"
+            echo "Metrics file:"
+            ls -la "$DATA_DIR"/metrics.prom 2>/dev/null || echo "  No metrics file found"
         else
             echo "$DAEMON_NAME is not running (stale PID file)"
             rm -f "$PID_FILE"
