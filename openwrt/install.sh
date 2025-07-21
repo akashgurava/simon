@@ -8,6 +8,7 @@ set -e
 INSTALL_DIR="/usr/bin"
 INIT_DIR="/etc/init.d"
 LOG_DIR="/var/log"
+HTTP_PORT=9184
 
 echo "=== Simon System Monitor Installation ==="
 echo ""
@@ -33,6 +34,26 @@ fi
 if [ -f "$INSTALL_DIR/simon-exporter" ]; then
     $INSTALL_DIR/simon-exporter stop 2>/dev/null || true
     echo "  ✓ Stopped exporter service"
+fi
+
+# Check if port is already in use and kill any processes
+echo "Checking if port $HTTP_PORT is in use..."
+if command -v netstat >/dev/null 2>&1; then
+    PORT_PIDS=$(netstat -tlnp 2>/dev/null | grep ":$HTTP_PORT " | awk '{print $7}' | cut -d"/" -f1)
+    if [ -n "$PORT_PIDS" ]; then
+        echo "  ! Port $HTTP_PORT is in use by processes: $PORT_PIDS"
+        echo "  Stopping processes using port $HTTP_PORT..."
+        for PID in $PORT_PIDS; do
+            echo "  Killing process $PID..."
+            kill -9 $PID 2>/dev/null || true
+            sleep 1
+        done
+        echo "  ✓ Port $HTTP_PORT should now be available"
+    else
+        echo "  ✓ Port $HTTP_PORT is available"
+    fi
+else
+    echo "  ! Cannot check port availability (netstat not found)"
 fi
 
 # Check for required HTTP server capability

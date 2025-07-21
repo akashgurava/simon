@@ -59,6 +59,26 @@ start_service() {
 stop_service() {
     echo "Stopping Simon monitoring system..."
     
+    # Check if port is already in use and kill any processes
+    echo "Checking if port $HTTP_PORT is in use..."
+    if command -v netstat >/dev/null 2>&1; then
+        PORT_PIDS=$(netstat -tlnp 2>/dev/null | grep ":$HTTP_PORT " | awk '{print $7}' | cut -d"/" -f1)
+        if [ -n "$PORT_PIDS" ]; then
+            echo "Port $HTTP_PORT is in use by processes: $PORT_PIDS"
+            echo "Stopping processes using port $HTTP_PORT..."
+            for PID in $PORT_PIDS; do
+                echo "Killing process $PID..."
+                kill -9 $PID 2>/dev/null || true
+                sleep 1
+            done
+            echo "Port $HTTP_PORT should now be available"
+        else
+            echo "Port $HTTP_PORT is available"
+        fi
+    else
+        echo "Cannot check port availability (netstat not found)"
+    fi
+    
     # Stop services using the scripts
     "$PROG_EXPORTER" stop 2>/dev/null || true
     "$PROG_MONITOR" stop 2>/dev/null || true
